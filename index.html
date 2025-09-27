@@ -1,0 +1,76 @@
+<!DOCTYPE html>
+<html lang="pt">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Hotel Compare</title>
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css">
+  <link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css" />
+  <style>
+    #map { height: 400px; width: 100%; }
+  </style>
+</head>
+<body class="bg-gray-50 text-gray-800">
+  <!-- Barra de busca -->
+  <header class="bg-white shadow p-4 flex gap-2">
+    <input id="cityInput" type="text" placeholder="Digite uma cidade (ex: Lisboa)" class="flex-1 p-2 border rounded-lg">
+    <input id="checkIn" type="date" class="p-2 border rounded-lg">
+    <input id="checkOut" type="date" class="p-2 border rounded-lg">
+    <button onclick="buscarHoteis()" class="bg-blue-600 text-white px-4 py-2 rounded-lg">Buscar</button>
+  </header>
+
+  <!-- Resultados + Mapa -->
+  <main class="p-6 grid md:grid-cols-2 gap-6">
+    <section id="resultados" class="space-y-4"></section>
+    <section><div id="map"></div></section>
+  </main>
+
+  <script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
+  <script>
+    const map = L.map("map").setView([38.7169, -9.139], 12);
+    L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
+      attribution: "&copy; OpenStreetMap contributors",
+    }).addTo(map);
+
+    async function buscarHoteis() {
+      const cidade = document.getElementById("cityInput").value;
+      const checkIn = document.getElementById("checkIn").value;
+      const checkOut = document.getElementById("checkOut").value;
+
+      const res = await fetch(`/api/hotels?city=${cidade}&checkInDate=${checkIn}&checkOutDate=${checkOut}`);
+      const data = await res.json();
+
+      const container = document.getElementById("resultados");
+      container.innerHTML = "";
+      map.eachLayer((layer) => { if (layer instanceof L.Marker) map.removeLayer(layer); });
+
+      data.forEach((hotel) => {
+        const offer = hotel.offers?.[0];
+        const preco = offer?.price?.total ? `€ ${offer.price.total}/noite` : "Preço indisponível";
+
+        // Card
+        const card = document.createElement("div");
+        card.className = "bg-white p-4 rounded-2xl shadow hover:shadow-lg transition";
+        card.innerHTML = `
+          <h2 class="font-bold text-lg">${hotel.hotel?.name}</h2>
+          <p class="text-sm text-gray-500">${hotel.hotel?.address?.cityName || ""}</p>
+          <p class="text-sm text-gray-600">${hotel.hotel?.description?.text || ""}</p>
+          <p class="text-xl font-semibold mt-2">${preco}</p>
+          ${
+            offer?.self
+              ? `<a href="${offer.self}" target="_blank" class="mt-3 inline-block bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-lg">Ver oferta</a>`
+              : `<button disabled class="mt-3 bg-gray-400 text-white px-4 py-2 rounded-lg w-full">Oferta indisponível</button>`
+          }
+        `;
+        container.appendChild(card);
+
+        // Mapa
+        if (hotel.hotel?.latitude && hotel.hotel?.longitude) {
+          const marker = L.marker([hotel.hotel.latitude, hotel.hotel.longitude]).addTo(map);
+          marker.bindPopup(`<b>${hotel.hotel.name}</b><br>${preco}`);
+        }
+      });
+    }
+  </script>
+</body>
+</html>
